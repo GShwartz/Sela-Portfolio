@@ -1,0 +1,24 @@
+apiVersion : apps/v1
+kind: Deployment
+metadata:
+  name: weighttracker 
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: weighttracker
+      
+  template:
+    metadata:
+      labels:
+        app: weighttracker 
+    spec:
+      containers:
+        - name: weighttracker
+          image: weighttrackerapp.azurecr.io/weighttracker
+          imagePullPolicy: "Always"
+          ports:
+          - containerPort: 8080
+          envFrom:
+          - secretRef:
+              name: secret
