@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+    name: psql-db
+    annotations:
+        description: "db-rs"
+    labels:
+        app: psql-db
+        tier: backend
+spec:
+    replicas: 3
+    selector:
+        matchLabels:
+            app: psql-db
+            tier: backend
+    template:
+        metadata:
+            labels:
+                app: psql-db
+                tier: backend
+        spec:
+            containers:
+            - name: psql-db
+              image: bitnami/postgresql
+              ports:
+              - containerPort: 5432
