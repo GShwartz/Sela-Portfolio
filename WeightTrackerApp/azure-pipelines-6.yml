@@ -70,7 +70,6 @@ stages:
     displayName: Deploy to Production
     environment: 
       name: Production
-      # resourceType: Kubernetes
     strategy:
       runOnce:
         deploy:
