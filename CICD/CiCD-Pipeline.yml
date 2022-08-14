@@ -1,25 +1,21 @@
 trigger:
-  branches:
-    include:
-    - feature/*
+#- master
+- feature/*
+
 resources:
-  repositories:
-  - repository: self
+- repo: self
+
 variables:
-- name: dockerRegistryServiceConnection
-  value: 'weighttrackerapp'
-- name: imageRepository
-  value: 'weighttracker'
-- name: containerRegistry
-  value: 'weighttrackerapp.azurecr.io'
-- name: dockerfilePath
-  value: '**/Dockerfile'
-- name: tag
-  value: '$(Build.BuildId)'
-- name: imagePullSecret
-  value: 'secret'
-pool:
-  name: Agents
+    # Container registry service connection established during pipeline creation
+    dockerRegistryServiceConnection: 'weighttrackerapp'
+    imageRepository: 'weighttracker'
+    containerRegistry: 'weighttrackerapp.azurecr.io'
+    dockerfilePath: '**/Dockerfile'
+    tag: '$(Build.BuildId)'
+    imagePullSecret: 'secret'
+
+pool: Agents
+
 stages:
 - stage: Build
   displayName: Build stage
@@ -38,79 +34,48 @@ stages:
         containerRegistry: $(dockerRegistryServiceConnection)
         tags: |
           $(build.BuildId)
-    - task: ecdc45f6-832d-4ad9-b52b-ee49e94659be@0
-      inputs:
-        targetPath: manifests
-        artifactName: manifests
+
+    - upload: manifests
+      artifact: manifests
+
 - stage: DeployToStage
   displayName: DeployToStage
-  dependsOn:
-  - Build
+  dependsOn: Build
   condition: and(succeeded(), eq(variables['build.sourceBranch'], 'refs/heads/master'))
+  
   variables:
-  - group: Staging
+    - group: Staging
+
   jobs:
   - deployment: DeployToStage
     displayName: DeployToStage
     pool:
       name: Agents
-    environment:
-      name: 'Stage'
+    environment: 'Stage'
     strategy:
       runOnce:
         deploy:
           steps:
-          - task: KubernetesManifest@0
-            displayName: Create imagePullSecret
-            inputs:
-              action: 'createSecret'
-              kubernetesServiceConnection: Stage-WebApp-Staging-stage-1659728327867
-              namespace: stage
-              secretType: 'generic'
-              secretName: 'secret'
-              secretArguments: '--from-literal=COOKIE_ENCRYPT_PWD=$(COOKIE_ENCRYPT_PWD) --from-literal=HOST=$(HOST) --from-literal=PORT=$(PORT) --from-literal=NODE_ENV=$(NODE_ENV) --from-literal=HOST_URL=$(HOST_URL) --from-literal=OKTA_CLIENT_ID=$(OKTA_CLIENT_ID) --from-literal=OKTA_CLIENT_SECRET=$(OKTA_CLIENT_SECRET) --from-literal=OKTA_ORG_URL=$(OKTA_ORG_URL) --from-literal=PGHOST=$(PGHOST) --from-literal=PGUSERNAME=$(PGUSERNAME) --from-literal=PGDATABASE=$(PGDATABASE) --from-literal=PGPASSWORD=$(PGPASSWORD) --from-literal=PGPORT=$(PGPORT)'
-          - task: KubernetesManifest@0
-            displayName: Deploy to Kubernetes cluster
-            inputs:
-              action: 'deploy'
-              kubernetesServiceConnection: Stage-WebApp-Staging-stage-1659728327867
-              namespace: stage
-              manifests: |
-                $(Pipeline.Workspace)/manifests/service.yml
-                $(Pipeline.Workspace)/manifests/ingress.yml
-                $(Pipeline.Workspace)/manifests/deploy.yml
-              containers: '$(containerRegistry)/$(imageRepository):$(build.BuildId)'
+            - template: pipes/deploy.yaml
+              parameters:
+                kubernetesServiceConnection: 'Stage-WebApp-Staging-stage-1659728327867'
+                namespace: 'stage'
+
 - stage: DeployToProduction
   condition: and(succeeded(), eq(variables['build.sourceBranch'], 'refs/heads/master'))
   variables:
-  - group: Production
+      - group: Production
   jobs:
   - deployment: Production
     displayName: Deploy to Production
-    environment:
+    environment: 
       name: Production
+      # resourceType: Kubernetes
     strategy:
       runOnce:
         deploy:
           steps:
-          - task: KubernetesManifest@0
-            displayName: Create imagePullSecret
-            inputs:
-              action: 'createSecret'
-              kubernetesServiceConnection: Production
-              namespace: production
-              secretType: 'generic'
-              secretName: 'secret'
-              secretArguments: '--from-literal=COOKIE_ENCRYPT_PWD=$(COOKIE_ENCRYPT_PWD) --from-literal=HOST=$(HOST) --from-literal=PORT=$(PORT) --from-literal=NODE_ENV=$(NODE_ENV) --from-literal=HOST_URL=$(HOST_URL) --from-literal=OKTA_CLIENT_ID=$(OKTA_CLIENT_ID) --from-literal=OKTA_CLIENT_SECRET=$(OKTA_CLIENT_SECRET) --from-literal=OKTA_ORG_URL=$(OKTA_ORG_URL) --from-literal=PGHOST=$(PGHOST) --from-literal=PGUSERNAME=$(PGUSERNAME) --from-literal=PGDATABASE=$(PGDATABASE) --from-literal=PGPASSWORD=$(PGPASSWORD) --from-literal=PGPORT=$(PGPORT)'
-          - task: KubernetesManifest@0
-            displayName: Deploy to Kubernetes cluster
-            inputs:
-              action: 'deploy'
-              kubernetesServiceConnection: Production
-              namespace: production
-              manifests: |
-                $(Pipeline.Workspace)/manifests/service.yml
-                $(Pipeline.Workspace)/manifests/ingress.yml
-                $(Pipeline.Workspace)/manifests/deploy.yml
-              containers: '$(containerRegistry)/$(imageRepository):$(build.BuildId)'
-
+            - template: pipes/deploy.yaml
+              parameters:
+                kubernetesServiceConnection: 'Production'
+                namespace: 'production'
