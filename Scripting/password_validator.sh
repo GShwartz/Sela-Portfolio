@@ -129,7 +129,6 @@ comment
 	while read -r line
 	do
 		echo "====================="
-		echo "Checking password: $line"
 		
 		check_length "$line"
 		tempDict["length"]="$?"
