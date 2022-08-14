@@ -1,0 +1,81 @@
+trigger:
+#- master
+- feature/*
+
+resources:
+- repo: self
+
+variables:
+    # Container registry service connection established during pipeline creation
+    dockerRegistryServiceConnection: 'weighttrackerapp'
+    imageRepository: 'weighttracker'
+    containerRegistry: 'weighttrackerapp.azurecr.io'
+    dockerfilePath: '**/Dockerfile'
+    tag: '$(Build.BuildId)'
+    imagePullSecret: 'secret'
+
+pool: Agents
+
+stages:
+- stage: Build
+  displayName: Build stage
+  jobs:
+  - job: Build
+    displayName: Build
+    pool:
+      name: Agents
+    steps:
+    - task: Docker@2
+      displayName: Build and push an image to container registry
+      inputs:
+        command: buildAndPush
+        repository: $(imageRepository)
+        dockerfile: $(dockerfilePath)
+        containerRegistry: $(dockerRegistryServiceConnection)
+        tags: |
+          $(build.BuildId)
+
+    - upload: manifests
+      artifact: manifests
+
+- stage: DeployToStage
+  displayName: DeployToStage
+  dependsOn: Build
+  condition: and(succeeded(), eq(variables['build.sourceBranch'], 'refs/heads/master'))
+  
+  variables:
+    - group: Staging
+
+  jobs:
+  - deployment: DeployToStage
+    displayName: DeployToStage
+    pool:
+      name: Agents
+    environment: 'Stage'
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+            - template: pipes/deploy.yaml
+              parameters:
+                kubernetesServiceConnection: 'Stage-WebApp-Staging-stage-1659728327867'
+                namespace: 'stage'
+
+- stage: DeployToProduction
+  condition: and(succeeded(), eq(variables['build.sourceBranch'], 'refs/heads/master'))
+  variables:
+      - group: Production
+  jobs:
+  - deployment: Production
+    displayName: Deploy to Production
+    environment: 
+      name: Production
+      # resourceType: Kubernetes
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+            - template: pipes/deploy.yaml
+              parameters:
+                kubernetesServiceConnection: 'Production'
+                namespace: 'production'
