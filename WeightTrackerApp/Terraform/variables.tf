@@ -1,0 +1,11 @@
+variable "resource_group_location" {}
+variable "agent_count" {}
+variable "dns_prefix" {}
+variable cluster_name {}
+variable resource_group_name {}
+variable location {}
+variable aks_service_principal_app_id {}
+variable aks_service_principal_client_secret {}
+variable "admin_username" {}
+variable "ssh_public_key" {}
+variable "environment" {}
